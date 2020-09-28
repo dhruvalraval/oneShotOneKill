@@ -1,0 +1,705 @@
+<!--
+DHRUVAL RAVAL (IU1741230041)
+DEEP RAVAL (IU1741230040)
+
+***************************************************************************************************************
+TOKYO MAYHEM is a 3d game developed on the WebGL based javascript library name Three.js                        *
+                                                                                                               *
+Game Plot of this game: 1 Player, 1 Enemy, 1 Bullet                                                            *                             
+                                                                                                               *                                                                                                  
+All the models are 3d modelled in Blender by Dhruval Raval and Deep Raval                                      *
+Game Development by Dhruval Raval                                                                              *
+Game Design and Reasearch by Deep Raval                                                                        *
+                                                                                                               *
+To run this file install Node.js and in command prompt enter following code in your extracted directory        *
+"http-server . -p 8000"                                                                                        *
+and then in web browser go to local host and start the game                                                    *
+                                                                                                               *
+***************************************************************************************************************
+-->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tokyo Mayhem</title>
+
+    <style>
+        body
+        {
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas{
+            width: 100%;
+            height: 100%;
+            /* background-color: black; */ 
+        }
+
+        #cursor{
+            top:50%;
+            left:50%;
+            position: absolute;
+            transform: translate(-50%,-50%);
+            width: 30px;
+            height: 30px;
+            z-index: 1000;
+            background-image: url('media/aim.png');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: cover;
+            filter: hue-rotate(120deg) brightness(2);
+            pointer-events: none;
+        }
+       
+        #info{
+            top:0;
+            left: 0;
+            position: absolute;
+            width: 100%;
+            height: 100vh;
+            z-index: 2000;
+            background-image: url('media/click_play.png');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: cover;
+            pointer-events: none;
+        }
+
+        .loader-wrapper{
+            top:0;
+            left:0;
+            position: absolute;
+            width: 100%;
+            height: 100vh;
+            background-color: black;
+            z-index: 5000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loader-wrapper p{
+            font-size: 30px;
+            margin: 0;
+            position: absolute;
+            top:50%;
+            left:50%;
+            transform: translate(-50%,-50%);
+            font-family: sans-serif;
+            color: black;
+            animation: 2s txt linear infinite;
+        }
+
+        @keyframes txt {
+            0%{
+                
+               opacity: 0.4;
+            }
+            50%{
+                
+                opacity: 1;
+            }
+            100%{
+                opacity: 0.4;
+            }
+        }
+        .container {
+            width: 350px;
+            height: 350px;
+            border-radius: 100%;
+            background: linear-gradient(165deg, rgba(255,255,255,1) 0%, rgb(220, 220, 220) 40%, rgb(170, 170, 170) 98%, rgb(10, 10, 10) 100%);
+            position: relative;
+        }
+        .loader {
+            pointer-events: none;
+        }
+
+        .loader:before {
+            position: absolute;
+            content: '';
+            width: 100%;
+            height: 100%;
+            border-radius: 100%;
+            border-bottom: 0 solid #ffffff05;
+            
+            box-shadow: 
+                0 -10px 20px 20px #ffffff40 inset,
+                0 -5px 15px 10px #ffffff50 inset,
+                0 -2px 5px #ffffff80 inset,
+                0 -3px 2px #ffffffBB inset,
+                0 2px 0px #ffffff,
+                0 2px 3px #ffffff,
+                0 5px 5px #ffffff90,
+                0 10px 15px #ffffff60,
+                0 10px 20px 20px #ffffff40;
+            filter: blur(3px);
+            animation: 2s rotate linear infinite;
+        }
+
+        @keyframes rotate {
+            100% {
+                transform: rotate(360deg)
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="cursor"></div>
+    <div id="info"></div>
+    <div class="loader-wrapper">
+        <div class="container">
+            <div class="loader"></div>
+        </div>
+        <p>LOADING</p>
+    </div>
+    <script src="js/jquery.min.3.5.0.js"></script>
+    <script src="js/three.js"></script>
+    <script src="js/PointerLockControls.js"></script>
+    <script src="js/GLTFLoader.js"></script>
+    <script>
+        $(document).ready(function(){
+            $(window).on("load",function(){
+                $(".loader-wrapper").fadeOut("slow");
+            });
+        });
+    
+        var scene = new THREE.Scene();
+
+        scene.fog = new THREE.FogExp2(0xff3535,0.003);
+        
+        var renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize( window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        //camera
+               
+        var camera = new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.01,1000);
+
+        camera.lookAt(new THREE.Vector3(0,0,0));
+        camera.position.set(0,0,0);
+
+ 
+        //variables
+        var gun;
+
+        var moveForward = false;
+		var moveBackward = false;
+		var moveLeft = false;
+		var moveRight = false;
+		var canJump = false;
+
+        var prevTime = performance.now();
+		var velocity = new THREE.Vector3();
+		var direction = new THREE.Vector3();
+
+        var clock = new THREE.Clock();
+
+        //resize wrt viewport
+        window.addEventListener("resize",function()
+        {
+            var width = window.innerWidth;
+            var height = window.innerHeight;
+            renderer.setSize(width, height);
+            camera.aspect = width/height;
+            camera.updateProjectionMatrix();
+        });
+
+        //controls
+        
+        var controls = new THREE.PointerLockControls( camera, document.body );
+        document.body.addEventListener('click',function(){
+            controls.lock();
+            document.querySelector("#info").style.opacity = 0;
+            document.querySelector("#info").style.display =" none";
+        },false);
+        scene.add( controls.getObject() );
+
+
+
+        var onKeyDown = function ( event ) 
+        {
+
+            switch ( event.keyCode ) {
+
+                case 38: // up
+                case 87: // w
+                    moveForward = true;
+                    break;
+
+                case 37: // left
+                case 65: // a
+                    moveLeft = true;
+                    break;
+
+                case 40: // down
+                case 83: // s
+                    moveBackward = true;
+                    break;
+
+                case 39: // right
+                case 68: // d
+                    moveRight = true;
+                    break;
+
+             case 32: // space
+                   if ( canJump === true ) velocity.y += 250;
+                    canJump = false;
+                    break;
+
+            }
+
+        };
+
+        var onKeyUp = function ( event )
+        {
+
+            switch ( event.keyCode ) {
+
+                case 38: // up
+                case 87: // w
+                    moveForward = false;
+                    break;
+
+                case 37: // left
+                case 65: // a
+                    moveLeft = false;
+                    break;
+
+                case 40: // down
+                case 83: // s
+                    moveBackward = false;
+                    break;
+
+                case 39: // right
+                case 68: // d
+                    moveRight = false;
+                    break;
+
+            }
+
+        };
+
+        document.addEventListener( 'keydown', onKeyDown, false );
+        document.addEventListener( 'keyup', onKeyUp, false );
+
+        
+        var controlSystem = function(){
+            if ( controls.isLocked === true ) 
+                  {
+
+                            
+
+                            var time = performance.now();
+                            var delta = ( time - prevTime ) / 1000;
+
+                            velocity.x -= velocity.x * 10.0 * delta;
+                            velocity.z -= velocity.z * 10.0 * delta;
+
+                            velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
+
+                            direction.z = Number( moveForward ) - Number( moveBackward );
+                            direction.x = Number( moveRight ) - Number( moveLeft );
+                            direction.normalize(); // this ensures consistent movements in all directions
+
+                            if ( moveForward || moveBackward ) velocity.z -= direction.z * 400.0 * delta;
+                            if ( moveLeft || moveRight ) velocity.x -= direction.x * 400.0 * delta;
+
+
+                            controls.moveRight( - velocity.x * delta );
+                            controls.moveForward( - velocity.z * delta );
+
+                            controls.getObject().position.y += ( velocity.y * delta ); // new behavior
+
+                            if ( controls.getObject().position.y < 0) {
+
+                                velocity.y = 0;
+                                controls.getObject().position.y = 0;
+
+                                canJump = true;
+
+                            }
+
+                            prevTime = time;
+
+                    }
+        };
+        
+        //lights
+            var ambient = new THREE.AmbientLight(0x00008b,0.8);
+            scene.add(ambient);
+        
+            var dlight = new THREE.DirectionalLight(0xFF0000,0.2);
+            dlight.position.set(0,20,-880);
+            dlight.castShadow = true;
+            scene.add(dlight);
+
+
+
+        //shadowMap for the streetlight as it cause shadererror on the shadowreciever
+
+        var shadowMapCamera = new THREE.PerspectiveCamera(90, 1, 0.5, 500);
+        var shadow = new THREE.LightShadow(shadowMapCamera);
+
+        
+
+        //streetlights
+
+            var intensity = 2;
+            var distance = 100;
+            var decay = 2;
+            
+            var c1 = 0xEA00D9, c2 = 0x133E7C;
+
+
+            var start = new THREE.PointLight( 0xfa40ff, intensity, distance, decay );
+            start.position.set(0,20,0);
+                start.shadow = shadow;
+                shadow.camera.position.copy(start.position);
+                start.castShadow = true;
+            scene.add(sl1);
+
+
+            var sl1 = new THREE.PointLight( c1, intensity, distance, decay );
+            sl1.position.set(42,20,-56);
+                sl1.shadow = shadow;
+                shadow.camera.position.copy(sl1.position);
+                sl1.castShadow = true;
+            scene.add(sl1);
+
+            var sl2 = new THREE.PointLight( c1, intensity, distance, decay );
+            sl2.position.set(-36,20,-87);
+                sl2.shadow = shadow;
+                shadow.camera.position.copy(sl2.position);
+                sl2.castShadow = true;
+            scene.add(sl2);
+
+            var sl3 = new THREE.PointLight( c1, intensity, distance, decay );
+            sl3.position.set(43,20,-136);
+                sl3.shadow = shadow;
+                shadow.camera.position.copy(sl3.position);
+                sl3.castShadow = true;
+            scene.add(sl3);
+
+            var sl4 = new THREE.PointLight( c1, intensity, 170, decay );
+            sl4.position.set(-39,20,-209);
+                sl4.shadow = shadow;
+                shadow.camera.position.copy(sl4.position);
+                sl4.castShadow = true;
+            scene.add(sl4);
+
+            var sl5 = new THREE.PointLight( c2, intensity, 150, decay );
+            sl5.position.set(42,20,-217);
+                sl5.shadow = shadow;
+                shadow.camera.position.copy(sl5.position);
+                sl5.castShadow = true;
+            scene.add(sl5);
+
+            var sl6 = new THREE.PointLight( c2, intensity, distance, decay );
+            sl6.position.set(-39,20,-341);
+                sl6.shadow = shadow;
+                shadow.camera.position.copy(sl6.position);
+                sl6.castShadow = true;
+            scene.add(sl6);
+
+            var sl7 = new THREE.PointLight( c2, intensity, distance, decay );
+            sl7.position.set(43,20,-340);
+                sl7.shadow = shadow;    
+                shadow.camera.position.copy(sl7.position);
+                sl7.castShadow = true;
+            scene.add(sl7);
+
+            var sl8 = new THREE.PointLight( c2, intensity, distance, decay );
+            sl8.position.set(-42,20,-420);
+                sl8.shadow = shadow;
+                shadow.camera.position.copy(sl8.position);
+                sl8.castShadow = true;
+            scene.add(sl8);
+
+            var sl9 = new THREE.PointLight( c1, intensity, distance, decay );
+            sl9.position.set(44,20,-461);
+                sl9.shadow = shadow;
+                shadow.camera.position.copy(sl9.position);
+                sl9.castShadow = true;
+            scene.add(sl9);
+
+            var sl10 = new THREE.PointLight( c1, intensity, distance, decay );
+            sl10.position.set(42,20,-592);
+                sl10.shadow = shadow;
+                shadow.camera.position.copy(sl10.position);
+                sl10.castShadow = true;
+            scene.add(sl10);
+
+            var sl11 = new THREE.PointLight( c1, intensity, distance, decay );
+            sl11.position.set(-43,20,-629);
+                sl11.shadow = shadow;
+                shadow.camera.position.copy(sl11.position);
+                sl11.castShadow = true;
+            scene.add(sl11);
+
+            var sl12 = new THREE.PointLight( c1, intensity, distance, decay );
+            sl12.position.set(43,20,-673);
+                sl12.shadow = shadow;
+                shadow.camera.position.copy(sl12.position);
+                sl12.castShadow = true;
+            scene.add(sl12);
+
+            var sl13 = new THREE.PointLight( c2, intensity, distance, decay );
+            sl13.position.set(41,20,-750);
+                sl13.shadow = shadow;
+                shadow.camera.position.copy(sl13.position);
+                sl13.castShadow = true;
+            scene.add(sl13);
+
+            var sl14 = new THREE.PointLight( c2, intensity, distance, decay );
+            sl14.position.set(-42,20,-747);
+                sl14.shadow = shadow;
+                shadow.camera.position.copy(sl14.position);
+                sl14.castShadow = true;
+            scene.add(sl14);
+
+            var sl15 = new THREE.PointLight( c2, intensity, distance, decay );
+            sl15.position.set(37,20,-748);
+                sl15.shadow = shadow;
+                shadow.camera.position.copy(sl15.position);
+                sl15.castShadow = true;
+            scene.add(sl15);
+
+            var sl16 = new THREE.PointLight( c2, intensity, distance, decay );
+            sl16.position.set(-40,20,-493);
+                sl16.shadow = shadow;
+                shadow.camera.position.copy(sl16.position);
+                sl16.castShadow = true;
+            scene.add(sl16);
+
+
+
+        
+    //create the shape & add material
+    
+            //street
+            var street;
+            street = new THREE.Object3D();
+        
+            var streetLoader = new THREE.GLTFLoader();
+            streetLoader.load("models/street2.gltf", function(gltf){
+                street = gltf.scene;
+                scene.add( street );
+                street.scale.set(1,1,1);
+                street.position.set(0,-21,-607);
+                street.rotation.set(0,Math.PI,0);
+              //floor.rotation.y=-Math.PI/2;
+              street.recieveShadow = true;   
+            });
+
+
+            //GUN
+            gun = new THREE.Object3D();
+           
+            var gunLoader = new THREE.GLTFLoader();
+            gunLoader.load("models/gun3.gltf",function(gltf){
+                gun = gltf.scene;
+                scene.add(gun);
+                gun.scale.set(0.4,0.4,0.4);
+                
+            });
+            //FINISH
+            var finish, finishMaterial;
+            var box = new THREE.BoxGeometry(160,200,50)
+            finishMaterial = new THREE.MeshLambertMaterial({
+                color: 0xff0000,
+                emissive: 0xff0000,
+                emissiveIntensity: 1000            
+            });
+
+            finish = new THREE.Mesh(  box, finishMaterial );
+            scene.add(finish)
+            finish.position.set(0,80,-880);
+
+
+            //enemy
+          var enem;
+            enem = new THREE.Object3D();
+            enem.name = "enemy1";
+            var mixer;
+            var enemLoader = new THREE.GLTFLoader();
+            enemLoader.load("models/enemy2.gltf",function(gltf){
+                enem = gltf.scene;
+                const animations = gltf.animations;
+                mixer = new THREE.AnimationMixer( enem );
+                mixer.timescale = 1;
+                const action = mixer.clipAction( animations[ 0 ] );
+                action.play();
+                scene.add(enem);
+                enem.scale.set(17,17,17);
+                enem.position.set(0,-18,-600);
+                enem.rotation.set(0,Math.PI,0);
+            });
+           
+
+
+        //bullets
+        
+        var bullet, b, bmat;
+        document.addEventListener("click", function(){
+            if(controls.isLocked === true){
+                shoot();
+            }
+        });
+        b = new THREE.SphereBufferGeometry(1,32,32); 
+                    bmat = new THREE.MeshLambertMaterial({
+                    color: 0xffffff,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 1000            
+                });
+
+                bullet = new THREE.Mesh(  b, bmat );
+                bullet.position.x = 0;
+                bullet.position.y = -5;
+                bullet.position.z = 0;
+
+                scene.add(bullet);
+              
+               
+  
+
+    
+        let  bDirection = new THREE.Vector3();
+
+        let shoot = function(){
+          bullet.position.z = -800;
+        };
+    
+
+        let killEnem = function(){
+            if(bullet.position.z <= enem.position.z){
+                scene.remove(enem);
+                scene.remove(bullet);
+                controls.unlock();
+            }
+            
+        };
+
+
+        var boundry = function(){
+            if(gun.position.x < -39){
+                camera.position.x = -38;
+            }
+            else if(gun.position.x > 46){
+                camera.position.x = 45;
+            }
+            else if(camera.position.z <= -785){
+                camera.position.z = -779;
+            }
+            else if(gun.position.z > 0){
+                camera.position.z = -1;
+            }
+        };
+
+
+        
+
+//RAYCAST
+        raycaster = new THREE.Raycaster();
+
+        var mouse = new THREE.Vector2(), INTERSECTED;
+        function onDocumentMouseMove( event ) {
+
+            event.preventDefault();
+
+            mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+            mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+        }
+
+        //game logic
+        var update = function()
+        {       
+                camera.rotation.x = Math.min(Math.abs(camera.rotation.x), 0.35);
+                camera.rotation.z= 0;
+
+                controlSystem();
+                
+                boundry();
+                
+                killEnem();
+
+                gun.position.set(
+                    camera.position.x + Math.sin(camera.rotation.y + Math.PI/6)*1.5,
+                    camera.position.y - 6.6,
+                    camera.position.z - Math.cos(camera.rotation.y + Math.PI/6)*12
+                );
+
+         
+                gun.rotation.set(
+                    camera.rotation.x,
+                    camera.rotation.y,
+                    camera.rotation.z
+                );
+
+                if(controls.isLocked === true){
+                    enem.position.z+=0.8;
+                }
+        };
+        
+ 
+       
+        //draw scene
+        var render = function()
+        {   
+            //gun.raycast(raycaster,bot);
+            
+            raycaster.setFromCamera( mouse, camera );
+            var count
+			var intersects = raycaster.intersectObjects(scene.children);
+
+				if ( intersects.length > 0 ) {
+                    count++;
+				} 
+
+           
+            renderer.render(scene, camera);
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            
+        };
+
+
+        //run gameloop(update, render, repeat)
+        var GameLoop = function()
+        {   
+            requestAnimationFrame(GameLoop);
+
+            var delta2 = clock.getDelta();
+           
+                if ( mixer ) {
+            
+                        mixer.update( delta2 );               
+                }
+                             
+            update();
+            render();
+        if(controls.isLocked == true){
+            document.querySelector("#info").style.opacity = "0";
+            document.getElementById("info").style.display ="none";
+        };
+        if(controls.isLocked == false){
+            document.querySelector("#info").style.opacity = "1";
+            document.getElementById("info").style.display =" block";
+        };
+        };
+
+        GameLoop();
+    
+        
+
+
+
+    </script>
+</body>
+</html>
